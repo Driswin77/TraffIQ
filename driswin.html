@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TraffIQ - Simple Map & Directions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Leaflet CSS and JS for OpenStreetMap -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background-color: #f0f2f5; }
+    header {
+      background-color: #007BFF;
+      color: white;
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      text-align: center;
+    }
+    header .logo-icon {
+        font-size: 3em;
+        line-height: 1;
+    }
+    main { padding: 1rem; max-width: 900px; margin: auto; }
+    section {
+      background: white;
+      padding: 1rem;
+      border-radius: 10px;
+      margin-bottom: 1rem;
+      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    }
+    input, select, button {
+      width: 100%;
+      padding: 0.6rem;
+      margin: 0.5rem 0;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+    }
+    button { background-color: #007BFF; color: white; border: none; cursor: pointer; }
+    button:hover { background-color: #0056b3; }
+    #map {
+      width: 100%; height: 400px;
+      border-radius: 10px;
+      margin-top: 1rem;
+    }
+    #alternateRoute {
+      font-weight: bold;
+      margin: 0.5rem 0;
+      padding: 0.5rem;
+      background: #ffeeba;
+      border-left: 5px solid #ffc107;
+      border-radius: 5px;
+    }
+    #popupModal {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+    #popupContent {
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    footer {
+      text-align: center;
+      padding: 1rem;
+      font-size: 0.9rem;
+      background: #eaeaea;
+      margin-top: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="logo-icon">🚦</span>
+    <div>
+      <h1>TraffIQ</h1>
+      <p>Powered by OpenStreetMap</p>
+    </div>
+  </header>
+  <main>
+    <section>
+      <h2>Smart Route Suggestion</h2>
+      <input type="text" id="from" placeholder="From (e.g. Kozhikode)" required />
+      <input type="text" id="to" placeholder="To (e.g. Calicut Medical College)" required />
+      <button onclick="geocodeAndRoute()">Suggest Route</button>
+      <div id="alternateRoute">Suggested route will appear here.</div>
+      <div id="map"></div>
+    </section>
+
+    <section>
+      <h2>Report an Issue</h2>
+      <input type="text" id="specificRegionReport" placeholder="Locate Specific Region (e.g. Rajah's HSS)" /> 
+      <select id="reportReason">
+        <option value="">-- Select Reason --</option>
+        <option value="Accidents">Accidents</option>
+        <option value="traffic_signal">Traffic Signal</option>
+        <option value="road_block">Road Block</option>
+        <option value="other">Other</option>
+      </select>
+      <input type="file" id="reportImage" accept="image/*" />
+      <button onclick="submitReport()">Report</button>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2025 TraffIQ</p>
+  </footer>
+
+  <div id="popupModal">
+    <div id="popupContent">
+      <p id="popupMessage"></p>
+      <button onclick="closePopup()">Close</button>
+    </div>
+  </div>
+
+  <script>
+    let map;
+    let control;
+    let fromMarker, toMarker;
+
+    function showPopup(message, type = 'info') {
+        const popup = document.getElementById("popupModal");
+        const msg = document.getElementById("popupMessage");
+        msg.innerText = message;
+        msg.style.color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+        popup.style.display = "flex";
+    }
+
+    function closePopup() {
+      document.getElementById("popupModal").style.display = "none";
+    }
+
+    function initMap() {
+      map = L.map('map').setView([10.9333, 76.0167], 14);
+      const osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      });
+
+      const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{
+          maxZoom: 20,
+          subdomains:['mt0','mt1','mt2','mt3'],
+          attribution: 'Google Satellite'
+      });
+
+      const googleTerrain = L.tileLayer('http://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',{
+          maxZoom: 20,
+          subdomains:['mt0','mt1','mt2','mt3'],
+          attribution: 'Google Terrain'
+      });
+
+      const googleHybrid = L.tileLayer('http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',{
+          maxZoom: 20,
+          subdomains:['mt0','mt1','mt2','mt3'],
+          attribution: 'Google Hybrid'
+      });
+
+      osmStandard.addTo(map);
+      const baseMaps = {
+          "OpenStreetMap": osmStandard,
+          "Satellite": googleSat,
+          "Terrain": googleTerrain,
+          "Hybrid": googleHybrid
+      };
+      L.control.layers(baseMaps).addTo(map);
+    }
+
+    async function geocodeAndRoute() {
+      const from = document.getElementById("from").value;
+      const to = document.getElementById("to").value;
+      const altRoute = document.getElementById("alternateRoute");
+
+      if (!from || !to) { 
+        showPopup("Please fill 'From' and 'To' fields for route suggestion.", 'error');
+        return;
+      }
+
+      if (fromMarker) map.removeLayer(fromMarker);
+      if (toMarker) map.removeLayer(toMarker);
+      if (control) map.removeControl(control);
+
+      try {
+        const fromResponse = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(from)}`);
+        const fromData = await fromResponse.json();
+        if (!fromData.length) throw new Error('From location not found');
+        const fromCoords = L.latLng(fromData[0].lat, fromData[0].lon);
+
+        fromMarker = L.marker(fromCoords).addTo(map).bindPopup(`<b>Start:</b> ${from}`).openPopup();
+
+        const toResponse = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(to)}`);
+        const toData = await toResponse.json();
+        if (!toData.length) throw new Error('To location not found');
+        const toCoords = L.latLng(toData[0].lat, toData[0].lon);
+
+        toMarker = L.marker(toCoords).addTo(map).bindPopup(`<b>End:</b> ${to}`).openPopup();
+
+        control = L.Routing.control({
+          waypoints: [fromCoords, toCoords],
+          routeWhileDragging: false,
+          show: false,
+          addWaypoints: false,
+          draggableWaypoints: false,
+          fitSelectedRoutes: true,
+          createMarker: () => null
+        }).on('routesfound', function (e) {
+          const route = e.routes[0];
+          const distance = (route.summary.totalDistance / 1000).toFixed(2);
+          const durationSeconds = route.summary.totalTime;
+          const durationMinutes = Math.round(durationSeconds / 60);
+          const durationText = durationMinutes < 60 ? `${durationMinutes} min` : `${Math.floor(durationMinutes / 60)} hr ${durationMinutes % 60} min`;
+          altRoute.innerHTML = `🚗 Main Route: ${distance} km, approx. ${durationText}.`;
+          showPopup(`Route found! Distance: ${distance} km, Time: ${durationText}.`, 'success');
+        }).addTo(map);
+
+      } catch (error) {
+        showPopup(`Route Error: ${error.message}`, 'error'); 
+        altRoute.innerText = 'Could not find a route.';
+      }
+    }
+
+    function submitReport() {
+      const region = document.getElementById("specificRegionReport").value.trim();
+      const reason = document.getElementById("reportReason").value;
+      const image = document.getElementById("reportImage").files[0];
+
+      if (!region || !reason) {
+        showPopup("Please fill out both region and reason before reporting.", "error");
+        return;
+      }
+
+      console.log("📝 Report Submitted:", { region, reason, image });
+      showPopup("Report submitted successfully!", "success");
+
+      document.getElementById("specificRegionReport").value = "";
+      document.getElementById("reportReason").value = "";
+      document.getElementById("reportImage").value = "";
+    }
+
+    window.onload = initMap;
+  </script>
+</body>
+</html>

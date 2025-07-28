@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Traffic Monitor Kottakkal</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Apply Inter font family */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background: linear-gradient(to bottom right, #e0f2fe, #e9d5ff); /* Light blue to light purple gradient */
+            min-height: 100vh; /* Ensure body takes full viewport height */
+        }
+        /* Custom scrollbar for general overflow */
+        .overflow-y-auto::-webkit-scrollbar {
+            width: 8px;
+        }
+        .overflow-y-auto::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* Style for the map preview image */
+        #map-preview-image {
+            width: 100%;
+            height: 250px; /* Fixed height for consistency */
+            object-fit: cover; /* Ensures image covers the area */
+            border-radius: 0.75rem;
+            border: 1px solid #e2e8f0; /* Light border */
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+        /* Style for image preview in report section */
+        #report-image-preview {
+            max-width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            display: none; /* Hidden by default */
+        }
+        /* Chart container height */
+        .chart-container {
+            height: 250px; /* Consistent height for all new charts */
+            width: 100%;
+        }
+        /* Alert card styling */
+        .alert-card {
+            background-color: #fff;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            margin-bottom: 1rem;
+            border-left: 5px solid;
+            transition: all 0.3s ease-in-out; /* Smooth transitions for alerts */
+        }
+        .alert-card.vip { border-color: #EF4444; /* Red */ }
+        .alert-card.construction { border-color: #F59E0B; /* Orange */ }
+        .alert-card.protest { border-color: #3B82F6; /* Blue */ }
+        .alert-card.other { border-color: #6B7280; /* Gray */ }
+        .alert-card.resolved { border-color: #10B981; /* Green */ opacity: 0.7; }
+
+        /* Fade-in/out transitions for panels */
+        .panel-transition {
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        .panel-transition.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-6 flex-grow">
+        <header class="flex flex-col sm:flex-row justify-between items-center mb-8 mt-4 bg-white p-4 rounded-xl shadow-lg">
+            <h1 class="text-4xl font-extrabold text-gray-800 mb-4 sm:mb-0">
+                <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
+                    Kottakkal Traffic Briefing
+                </span>
+            </h1>
+            <button id="login-controller-button"
+                    class="bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-300 ease-in-out transform hover:scale-105">
+                Login as Traffic Controller
+            </button>
+        </header>
+
+        <!-- New: Hero Section -->
+        <section class="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-8 rounded-2xl shadow-xl mb-8 text-center transform transition-all duration-500 ease-in-out hover:scale-[1.01]">
+            <h2 class="text-3xl md:text-4xl font-bold mb-4">Navigate Kottakkal Smarter.</h2>
+            <p class="text-lg md:text-xl opacity-90">Get real-time traffic insights, plan efficient routes, and report issues to improve your daily commute.</p>
+        </section>
+
+        <div class="bg-white p-8 rounded-2xl shadow-xl mb-8 border border-gray-200">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                    <label for="start" class="block text-sm font-medium text-gray-700 mb-2">Starting Point:</label>
+                    <input type="text" id="start" placeholder="e.g., Kottakkal Bus Stand"
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 ease-in-out shadow-sm">
+                </div>
+                <div>
+                    <label for="end" class="block text-sm font-medium text-gray-700 mb-2">Destination:</label>
+                    <input type="text" id="end" placeholder="e.g., Kottakkal Ayurveda Hospital"
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 ease-in-out shadow-sm">
+                </div>
+            </div>
+
+            <div class="flex items-end mt-4">
+                <button id="get-briefing"
+                        class="w-full bg-gradient-to-r from-green-500 to-teal-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:from-green-600 hover:to-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-300 ease-in-out transform hover:scale-105">
+                    Get Traffic Briefing ✨
+                </button>
+            </div>
+
+            <div id="message-box" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative hidden mb-4 mt-4" role="alert">
+                <strong class="font-bold">Error!</strong>
+                <span class="block sm:inline" id="message-text"></span>
+                <span class="absolute top-0 bottom-0 right-0 px-4 py-3 cursor-pointer" onclick="document.getElementById('message-box').classList.add('hidden')">
+                    <svg class="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Close</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg>
+                </span>
+            </div>
+
+            <div id="map-preview-panel" class="mt-8 bg-gray-50 p-6 rounded-lg shadow-inner border border-gray-200 hidden panel-transition">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Route Preview:</h2>
+                <!-- Reverted src to the uploaded image path -->
+                <img id="map-preview-image" src="/file_content/uploaded:kottakkalmap.png-73c6181e-23d2-4a3f-adf6-fbc5883c8e32" alt="Kottakkal Map Preview">
+                <p class="text-gray-600 text-sm mt-2 text-center">Refer to the map image for visual context.</p>
+                <button id="get-live-map-info"
+                        class="w-full mt-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-300 ease-in-out transform hover:scale-105">
+                    Get Live Map Info
+                </button>
+            </div>
+
+            <div id="briefing-panel" class="mt-8 bg-blue-50 p-6 rounded-lg shadow-inner border border-blue-200 hidden panel-transition">
+                <h2 class="text-2xl font-bold text-blue-800 mb-4">Traffic Briefing:</h2>
+                <div class="flex flex-col md:flex-row gap-6">
+                    <div class="md:w-1/3">
+                        <canvas id="trafficChart"></canvas>
+                    </div>
+                    <div class="md:w-2/3">
+                        <div id="briefing-summary" class="text-blue-700 leading-relaxed mb-4">
+                            <!-- Estimated time and route description will be here -->
+                        </div>
+                        <div id="briefing-text-content" class="text-blue-700 leading-relaxed mb-4">
+                            <p class="text-blue-500">Loading briefing...</p>
+                        </div>
+                        <div id="key-congestion-areas" class="text-blue-700 leading-relaxed">
+                            <!-- Key congestion areas will be listed here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="daily-traffic-panel" class="mt-8 bg-purple-50 p-6 rounded-lg shadow-inner border border-purple-200 hidden panel-transition">
+                <h2 class="text-2xl font-bold text-purple-800 mb-4">Daily Traffic Outlook:</h2>
+                <div class="chart-container">
+                    <canvas id="dailyTrafficChart"></canvas>
+                </div>
+                <p class="text-purple-700 text-sm mt-4">
+                    This graph shows the expected traffic congestion in Kottakkal throughout the day (0-10 scale), based on typical patterns.
+                </p>
+            </div>
+
+            <!-- New: Historical Traffic Trends Panel -->
+            <div id="historical-traffic-panel" class="mt-8 bg-green-50 p-6 rounded-lg shadow-inner border border-green-200 hidden panel-transition">
+                <h2 class="text-2xl font-bold text-green-800 mb-4">Weekly Traffic Trends:</h2>
+                <div class="chart-container">
+                    <canvas id="historicalTrafficChart"></canvas>
+                </div>
+                <p class="text-green-700 text-sm mt-4">
+                    Average traffic congestion in Kottakkal throughout the week.
+                </p>
+            </div>
+
+            <!-- New: Issue Distribution Panel -->
+            <div id="issue-distribution-panel" class="mt-8 bg-red-50 p-6 rounded-lg shadow-inner border border-red-200 hidden panel-transition">
+                <h2 class="text-2xl font-bold text-red-800 mb-4">Reported Issue Distribution:</h2>
+                <div class="chart-container">
+                    <canvas id="issueDistributionChart"></canvas>
+                </div>
+                <p class="text-red-700 text-sm mt-4">
+                    Breakdown of reported issues in Kottakkal.
+                </p>
+            </div>
+
+            <!-- New: Fixed Route Hourly Travel Time Panel -->
+            <div id="fixed-route-travel-panel" class="mt-8 bg-indigo-50 p-6 rounded-lg shadow-inner border border-indigo-200 hidden panel-transition">
+                <h2 class="text-2xl font-bold text-indigo-800 mb-4">Travel Time: Kottakkal Bus Stand to Ayurveda Hospital</h2>
+                <div class="chart-container">
+                    <canvas id="fixedRouteTravelChart"></canvas>
+                </div>
+                <p class="text-indigo-700 text-sm mt-4">
+                    Estimated travel time for a common route throughout the day.
+                </p>
+            </div>
+
+            <!-- New: Alternative Routes Comparison Panel -->
+            <div id="alternative-routes-panel" class="mt-8 bg-yellow-50 p-6 rounded-lg shadow-inner border border-yellow-200 hidden panel-transition">
+                <h2 class="text-2xl font-bold text-yellow-800 mb-4">Alternative Routes Comparison:</h2>
+                <div class="chart-container">
+                    <canvas id="alternativeRoutesChart"></canvas>
+                </div>
+                <p class="text-yellow-700 text-sm mt-4">
+                    Comparison of estimated travel times and traffic scores for alternative routes.
+                </p>
+            </div>
+
+            <!-- New: Road Alerts Section -->
+            <div id="road-alerts-panel" class="mt-8 bg-blue-100 p-6 rounded-lg shadow-inner border border-blue-300 hidden panel-transition">
+                <h2 class="text-2xl font-bold text-blue-900 mb-4">🚨 Road Alerts 🚨</h2>
+                <div id="alerts-list" class="space-y-4">
+                    <!-- Alerts will be dynamically inserted here -->
+                </div>
+                <p class="text-blue-700 text-sm mt-4">
+                    Stay informed about road blockades and special events in Kottakkal.
+                </p>
+            </div>
+
+            <!-- Existing Report Issue Section -->
+            <div id="report-issue-panel" class="mt-8 bg-yellow-50 p-6 rounded-lg shadow-inner border border-yellow-200">
+                <h2 class="text-2xl font-bold text-yellow-800 mb-4">Report an Issue:</h2>
+                <div class="mb-4">
+                    <label for="issue-type" class="block text-sm font-medium text-gray-700 mb-2">Type of Issue:</label>
+                    <select id="issue-type"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition duration-200 ease-in-out shadow-sm">
+                        <option value="">Select an issue type</option>
+                        <option value="accident">Accident</option>
+                        <option value="pothole">Pothole</option>
+                        <option value="road_block">Road Block</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label for="issue-description" class="block text-sm font-medium text-gray-700 mb-2">Description (Optional):</label>
+                    <textarea id="issue-description" rows="3" placeholder="e.g., Car accident near Kottakkal bypass"
+                              class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition duration-200 ease-in-out shadow-sm"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="issue-location" class="block text-sm font-medium text-gray-700 mb-2">Location (Google Maps Link or Coordinates):</label>
+                    <input type="text" id="issue-location" placeholder="e.g., https://goo.gl/maps/xyz123 or 10.9333, 76.0167"
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition duration-200 ease-in-out shadow-sm">
+                </div>
+                <div class="mb-4">
+                    <label for="issue-image" class="block text-sm font-medium text-gray-700 mb-2">Upload Image (Optional):</label>
+                    <input type="file" id="issue-image" accept="image/*"
+                           class="w-full text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-100 file:text-yellow-700 hover:file:bg-yellow-200">
+                    <img id="report-image-preview" src="#" alt="Image Preview">
+                </div>
+                <button id="submit-report"
+                        class="w-full bg-gradient-to-r from-yellow-500 to-orange-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:from-yellow-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition duration-300 ease-in-out transform hover:-translate-y-1">
+                    Submit Report
+                </button>
+                <div id="report-message" class="mt-4 text-center hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-gray-800 text-white text-center p-4 mt-auto">
+        <p>&copy; 2025 Smart Traffic Monitor. All rights reserved.</p>
+    </footer>
+
+    <script>
+        let trafficChart; // Variable to hold the route traffic score Chart.js instance
+        let dailyTrafficChart; // Variable to hold the daily traffic outlook Chart.js instance
+        let historicalTrafficChart; // New: Historical traffic chart instance
+        let issueDistributionChart; // New: Issue distribution chart instance
+        let fixedRouteTravelChart; // New: Fixed route travel time chart instance
+        let alternativeRoutesChart; // New: Alternative routes chart instance
+
+        // Sample alerts for demonstration - now a mutable array
+        const sampleAlerts = [
+            {
+                id: 'alert1',
+                type: 'vip',
+                reason: 'VIP Movement',
+                location: 'Kottakkal Bypass near Bus Stand',
+                startTime: '10:00 AM',
+                endTime: '10:30 AM',
+                status: 'active'
+            },
+            {
+                id: 'alert2',
+                type: 'construction',
+                reason: 'Road Construction',
+                location: 'Near Kottakkal Ayurveda Hospital entrance',
+                startTime: '09:00 AM',
+                endTime: '05:00 PM',
+                status: 'active'
+            },
+            {
+                id: 'alert3',
+                type: 'protest',
+                reason: 'Local Protest',
+                location: 'Town Square',
+                startTime: '02:00 PM',
+                endTime: '03:00 PM',
+                status: 'active'
+            },
+            {
+                id: 'alert4',
+                type: 'other',
+                reason: 'Fallen Tree',
+                location: 'Road to Changuvetty',
+                startTime: '08:00 AM',
+                endTime: '09:00 AM',
+                status: 'resolved' // Example of a resolved alert
+            }
+        ];
+
+        let isControllerLoggedIn = false; // New flag to track login status
+
+        // Function to display messages to the user
+        function showMessage(message, type = 'error') {
+            const messageBox = document.getElementById('message-box');
+            const messageText = document.getElementById('message-text');
+            messageText.textContent = message;
+            messageBox.classList.remove('hidden');
+            if (type === 'error') {
+                messageBox.classList.remove('bg-green-100', 'border-green-400', 'text-green-700');
+                messageBox.classList.add('bg-red-100', 'border-red-400', 'text-red-700');
+            } else {
+                messageBox.classList.remove('bg-red-100', 'border-red-400', 'text-green-700');
+                messageBox.classList.add('bg-green-100', 'border-green-400', 'text-green-700');
+            }
+        }
+
+        // Function to hide messages
+        function hideMessage() {
+            document.getElementById('message-box').classList.add('hidden');
+        }
+
+        // Function to create or update the single traffic score chart
+        function updateTrafficChart(score) {
+            const ctx = document.getElementById('trafficChart').getContext('2d');
+
+            if (trafficChart) {
+                trafficChart.destroy(); // Destroy existing chart if it exists
+            }
+
+            // Determine bar color based on score
+            let barColor;
+            if (score <= 3) {
+                barColor = '#4CAF50'; // Green for low traffic
+            } else if (score <= 7) {
+                barColor = '#FFC107'; // Amber for moderate traffic
+            } else {
+                barColor = '#F44336'; // Red for high traffic
+            }
+
+            trafficChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Traffic Score'],
+                    datasets: [{
+                        label: 'Congestion Level (0-10)',
+                        data: [score],
+                        backgroundColor: [barColor],
+                        borderColor: [barColor],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false, // Allow canvas to resize freely
+                    indexAxis: 'y', // Make it a horizontal bar chart
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            max: 10, // Max score is 10
+                            ticks: {
+                                stepSize: 1
+                            },
+                            grid: {
+                                display: false // Hide x-axis grid lines
+                            }
+                        },
+                        y: {
+                            grid: {
+                                display: false // Hide y-axis grid lines
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false // Hide legend
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return Traffic Score: ${context.raw};
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Function to create or update the daily traffic outlook chart
+        function updateDailyTrafficChart(dailyOutlook) {
+            const ctx = document.getElementById('dailyTrafficChart').getContext('2d');
+
+            if (dailyTrafficChart) {
+                dailyTrafficChart.destroy(); // Destroy existing chart if it exists
+            }
+
+            const labels = dailyOutlook.map(item => item.hour);
+            const data = dailyOutlook.map(item => item.score);
+
+            dailyTrafficChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Expected Traffic Score',
+                        data: data,
+                        borderColor: 'rgb(102, 51, 153)', // A shade of purple
+                        backgroundColor: 'rgba(102, 51, 153, 0.2)',
+                        fill: true,
+                        tension: 0.3, // Smooth the line
+                        pointBackgroundColor: 'rgb(102, 51, 153)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(102, 51, 153)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time of Day'
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            max: 10,
+                            title: {
+                                display: true,
+                                text: 'Traffic Score (0-10)'
+                            },
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return Traffic Score: ${context.raw};
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // New: Function to create or update the historical traffic chart
+        function updateHistoricalTrafficChart(historicalData) {
+            const ctx = document.getElementById('historicalTrafficChart').getContext('2d');
+
+            if (historicalTrafficChart) {
+                historicalTrafficChart.destroy();
+            }
+
+            const labels = historicalData.map(item => item.day);
+            const data = historicalData.map(item => item.score);
+
+            historicalTrafficChart = new Chart(ctx, {
+                type: 'line', // Line chart for trends
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Average Traffic Score',
+                        data: data,
+                        borderColor: 'rgb(76, 175, 80)', // Green color
+                        backgroundColor: 'rgba(76, 175, 80, 0.2)',
+                        fill: true,
+                        tension: 0.3,
+                        pointBackgroundColor: 'rgb(76, 175, 80)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(76, 175, 80)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Day of Week'
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            max: 10,
+                            title: {
+                                display: true,
+                                text: 'Traffic Score (0-10)'
+                            },
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return Score: ${context.raw};
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // New: Function to create or update the issue distribution chart
+        function updateIssueDistributionChart(distributionData) {
+            const ctx = document.getElementById('issueDistributionChart').getContext('2d');
+
+            if (issueDistributionChart) {
+                issueDistributionChart.destroy();
+            }
+
+            const labels = Object.keys(distributionData);
+            const data = Object.values(distributionData);
+            const backgroundColors = [
+                'rgb(244, 67, 54)', // Red for Accident
+                'rgb(255, 193, 7)', // Amber for Pothole
+                'rgb(33, 150, 243)', // Blue for Road Block
+                'rgb(158, 158, 158)' // Grey for Other
+            ];
+
+            issueDistributionChart = new Chart(ctx, {
+                type: 'pie', // Pie chart for distribution
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: backgroundColors,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right', // Place legend on the right
+                            labels: {
+                                boxWidth: 20 // Smaller color boxes
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += context.parsed + '%'; // Assuming data is in percentage
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // New: Function to create or update the fixed route hourly travel chart
+        function updateFixedRouteHourlyTravelChart(hourlyTravelData) {
+            const ctx = document.getElementById('fixedRouteTravelChart').getContext('2d');
+
+            if (fixedRouteTravelChart) {
+                fixedRouteTravelChart.destroy();
+            }
+
+            const labels = hourlyTravelData.map(item => item.hour);
+            const data = hourlyTravelData.map(item => item.travelTimeMinutes);
+
+            fixedRouteTravelChart = new Chart(ctx, {
+                type: 'line', // Line chart for time series
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Travel Time (minutes)',
+                        data: data,
+                        borderColor: 'rgb(63, 81, 181)', // Indigo color
+                        backgroundColor: 'rgba(63, 81, 181, 0.2)',
+                        fill: true,
+                        tension: 0.3,
+                        pointBackgroundColor: 'rgb(63, 81, 181)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(63, 81, 181)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time of Day'
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Travel Time (minutes)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value + ' min';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return Travel Time: ${context.raw} min;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // New: Function to create or update the alternative routes comparison chart
+        function updateAlternativeRoutesChart(routesComparisonData) {
+            const ctx = document.getElementById('alternativeRoutesChart').getContext('2d');
+
+            if (alternativeRoutesChart) {
+                alternativeRoutesChart.destroy();
+            }
+
+            const labels = routesComparisonData.map(item => item.routeName);
+            const travelTimes = routesComparisonData.map(item => item.estimatedTimeMinutes);
+            const trafficScores = routesComparisonData.map(item => item.trafficScore);
+
+            alternativeRoutesChart = new Chart(ctx, {
+                type: 'bar', // Bar chart for comparison
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Estimated Travel Time (min)',
+                            data: travelTimes,
+                            backgroundColor: 'rgba(255, 159, 64, 0.8)', // Orange
+                            borderColor: 'rgb(255, 159, 64)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Traffic Score (0-10)',
+                            data: trafficScores,
+                            backgroundColor: 'rgba(75, 192, 192, 0.8)', // Teal
+                            borderColor: 'rgb(75, 192, 192)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Route'
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Value'
+                            },
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top', // Legend at the top
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y;
+                                        if (context.dataset.label.includes('Time')) {
+                                            label += ' min';
+                                        }
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        // Function to set the Google Maps directions link for the button
+        function setLiveMapInfoButtonLink(start, end) {
+            const getLiveMapInfoButton = document.getElementById('get-live-map-info');
+
+            if (!start || !end) {
+                getLiveMapInfoButton.onclick = null; // Disable button click
+                getLiveMapInfoButton.classList.add('opacity-50', 'cursor-not-allowed'); // Visually disable
+                return;
+            }
+            // Google Maps directions URL for click-through
+            const directionsUrl = https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(start)}&destination=${encodeURIComponent(end)};
+
+            getLiveMapInfoButton.onclick = () => {
+                window.open(directionsUrl, '_blank', 'noopener noreferrer');
+            };
+            getLiveMapInfoButton.classList.remove('opacity-50', 'cursor-not-allowed'); // Enable button
+        }
+
+        // New: Function to display road alerts
+        function displayRoadAlerts(alerts) {
+            const alertsList = document.getElementById('alerts-list');
+            alertsList.innerHTML = ''; // Clear previous alerts
+
+            if (alerts.length === 0) {
+                alertsList.innerHTML = '<p class="text-gray-600">No active road alerts at this time.</p>';
+                return;
+            }
+
+            alerts.forEach(alert => {
+                const alertCard = document.createElement('div');
+                alertCard.id = alert-${alert.id};
+                alertCard.className = alert-card ${alert.type} ${alert.status} flex flex-col sm:flex-row justify-between items-start sm:items-center;
+
+                let statusText = alert.status === 'active' ? <span class="text-red-600 font-bold">Active</span> : <span class="text-green-600 font-bold">Resolved</span>;
+                let buttonHtml = '';
+
+                // Only show "Mark as Resolved" button if controller is logged in AND alert is active
+                if (isControllerLoggedIn && alert.status === 'active') {
+                    buttonHtml = <button class="mark-resolved-btn bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold py-1 px-3 rounded-full shadow-md transition duration-200 mt-2 sm:mt-0" data-alert-id="${alert.id}">Mark as Resolved</button>;
+                }
+
+                alertCard.innerHTML = `
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800 capitalize mb-1">${alert.type.replace('_', ' ')}: ${alert.reason}</h3>
+                        <p class="text-gray-700 text-sm mb-1"><strong>Location:</strong> ${alert.location}</p>
+                        <p class="text-gray-700 text-sm mb-1"><strong>Time:</strong> ${alert.startTime} - ${alert.endTime}</p>
+                        <p class="text-gray-700 text-sm"><strong>Status:</strong> ${statusText}</p>
+                    </div>
+                    ${buttonHtml}
+                `;
+                alertsList.appendChild(alertCard);
+
+                // Add event listener for the "Mark as Resolved" button if it exists
+                if (buttonHtml !== '') {
+                    alertCard.querySelector('.mark-resolved-btn').addEventListener('click', (event) => {
+                        const alertId = event.target.dataset.alertId;
+                        const targetAlert = sampleAlerts.find(a => a.id === alertId);
+                        if (targetAlert) {
+                            targetAlert.status = 'resolved';
+                            displayRoadAlerts(sampleAlerts); // Re-render alerts to update status
+                            showMessage(Alert "${targetAlert.reason}" marked as resolved., 'success');
+                        }
+                    });
+                }
+            });
+        }
+
+
+        // Function for Gemini API call to get traffic briefing
+        async function getTrafficBriefing() {
+            hideMessage(); // Hide any previous messages
+
+            const start = document.getElementById("start").value;
+            const end = document.getElementById("end").value;
+            const briefingPanel = document.getElementById("briefing-panel");
+            const dailyTrafficPanel = document.getElementById("daily-traffic-panel");
+            const mapPreviewPanel = document.getElementById("map-preview-panel");
+            const historicalTrafficPanel = document.getElementById("historical-traffic-panel"); // New panel
+            const issueDistributionPanel = document.getElementById("issue-distribution-panel"); // New panel
+            const fixedRouteTravelPanel = document.getElementById("fixed-route-travel-panel"); // New panel
+            const alternativeRoutesPanel = document.getElementById("alternative-routes-panel"); // New panel
+            const roadAlertsPanel = document.getElementById("road-alerts-panel"); // New panel
+
+            const briefingSummary = document.getElementById("briefing-summary");
+            const briefingTextContent = document.getElementById("briefing-text-content");
+            const keyCongestionAreasDiv = document.getElementById("key-congestion-areas");
+
+            if (!start || !end) {
+                showMessage("Please enter both a starting point and a destination before getting a briefing.", 'error');
+                // Hide all panels if inputs are empty
+                [briefingPanel, dailyTrafficPanel, mapPreviewPanel, historicalTrafficPanel, issueDistributionPanel, fixedRouteTravelPanel, alternativeRoutesPanel, roadAlertsPanel].forEach(panel => panel.classList.add('hidden', 'panel-transition'));
+                setLiveMapInfoButtonLink('', ''); // Disable button
+                return;
+            }
+
+            // Show all panels and clear previous content
+            // Add 'show' class for fade-in effect
+            [briefingPanel, dailyTrafficPanel, mapPreviewPanel, historicalTrafficPanel, issueDistributionPanel, fixedRouteTravelPanel, alternativeRoutesPanel, roadAlertsPanel].forEach(panel => {
+                panel.classList.remove('hidden');
+                setTimeout(() => panel.classList.add('show'), 10); // Small delay to trigger transition
+            });
+
+
+            briefingSummary.innerHTML = '<p class="text-blue-500">Generating detailed briefing... <span class="animate-pulse">...</span></p>';
+            briefingTextContent.innerHTML = '';
+            keyCongestionAreasDiv.innerHTML = '';
+            document.getElementById('dailyTrafficChart').getContext('2d').clearRect(0, 0, document.getElementById('dailyTrafficChart').width, document.getElementById('dailyTrafficChart').height);
+            // Clear new chart areas
+            document.getElementById('historicalTrafficChart').getContext('2d').clearRect(0, 0, document.getElementById('historicalTrafficChart').width, document.getElementById('historicalTrafficChart').height);
+            document.getElementById('issueDistributionChart').getContext('2d').clearRect(0, 0, document.getElementById('issueDistributionChart').width, document.getElementById('issueDistributionChart').height);
+            document.getElementById('fixedRouteTravelChart').getContext('2d').clearRect(0, 0, document.getElementById('fixedRouteTravelChart').width, document.getElementById('fixedRouteTravelChart').height);
+            document.getElementById('alternativeRoutesChart').getContext('2d').clearRect(0, 0, document.getElementById('alternativeRoutesChart').width, document.getElementById('alternativeRoutesChart').height);
+            document.getElementById('alerts-list').innerHTML = '<p class="text-blue-500">Loading alerts...</p>'; // Clear alerts list
+
+
+            // Set the Google Maps directions link for the button
+            setLiveMapInfoButtonLink(start, end);
+
+            // Display sample road alerts (hardcoded for demo)
+            displayRoadAlerts(sampleAlerts);
+
+
+            // UPDATED PROMPT to request all new data points
+            const prompt = `Generate a JSON object containing a detailed traffic briefing for a commute from "${start}" to "${end}" in Kottakkal, Kerala, India. The JSON should have the following fields:
+            \trafficScore\ (an integer from 0 to 10, where 0 is no traffic and 10 is severe congestion),
+            \estimatedTravelTime\ (a concise string describing the estimated travel time, e.g., "25-30 minutes" or "approximately 1 hour"),
+            \mostEfficientRouteDescription\ (a concise textual description of the most efficient route, mentioning key roads or landmarks, under 50 words),
+            \briefingText\ (a general textual summary of the traffic conditions, under 100 words, advising on common congestion issues in Kottakkal),
+            \keyCongestionAreas\ (an array of strings listing specific congestion points, if any, or an empty array if none),
+            \dailyTrafficOutlook\ (an array of 24 objects, each representing an hour of the day from "00:00" to "23:00" and an associated \score\ (integer from 0 to 10) representing expected traffic congestion for that hour in Kottakkal, based on typical daily patterns),
+            \historicalTrafficTrends\ (an array of 7 objects, each for a day of the week from Monday to Sunday, with an associated \score\ (integer from 0 to 10) representing the typical average traffic congestion for that day in Kottakkal),
+            \issueDistribution\ (an object with keys "accident", "pothole", "road_block", "other", and integer values representing their simulated percentage distribution of reported issues, summing to 100),
+            \fixedRouteHourlyTravelTimes\ (an array of 24 objects for the route from "Kottakkal Bus Stand" to "Kottakkal Ayurveda Hospital", each with an \hour\ (e.g., "06:00") and \travelTimeMinutes\ (integer) representing typical travel time),
+            \alternativeRoutesComparison\ (an array of 2-3 objects, each with a \routeName\ (string, e.g., "Main Road Route"), \estimatedTimeMinutes\ (integer), and \trafficScore\ (integer from 0-10) for alternative routes between "${start}" and "${end}").
+            Focus on helpful advice and typical traffic patterns for Kottakkal.`;
+
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+            const payload = {
+                contents: chatHistory,
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            "trafficScore": { "type": "INTEGER" },
+                            "estimatedTravelTime": { "type": "STRING" },
+                            "mostEfficientRouteDescription": { "type": "STRING" },
+                            "briefingText": { "type": "STRING" },
+                            "keyCongestionAreas": { "type": "ARRAY", "items": { "type": "STRING" } },
+                            "dailyTrafficOutlook": {
+                                "type": "ARRAY",
+                                "items": {
+                                    "type": "OBJECT",
+                                    "properties": { "hour": { "type": "STRING" }, "score": { "type": "INTEGER" } }
+                                }
+                            },
+                            "historicalTrafficTrends": {
+                                "type": "ARRAY",
+                                "items": {
+                                    "type": "OBJECT",
+                                    "properties": { "day": { "type": "STRING" }, "score": { "type": "INTEGER" } }
+                                }
+                            },
+                            "issueDistribution": {
+                                "type": "OBJECT",
+                                "properties": {
+                                    "accident": { "type": "INTEGER" },
+                                    "pothole": { "type": "INTEGER" },
+                                    "road_block": { "type": "INTEGER" },
+                                    "other": { "type": "INTEGER" }
+                                }
+                            },
+                            "fixedRouteHourlyTravelTimes": {
+                                "type": "ARRAY",
+                                "items": {
+                                    "type": "OBJECT",
+                                    "properties": { "hour": { "type": "STRING" }, "travelTimeMinutes": { "type": "INTEGER" } }
+                                }
+                            },
+                            "alternativeRoutesComparison": {
+                                "type": "ARRAY",
+                                "items": {
+                                    "type": "OBJECT",
+                                    "properties": {
+                                        "routeName": { "type": "STRING" },
+                                        "estimatedTimeMinutes": { "type": "INTEGER" },
+                                        "trafficScore": { "type": "INTEGER" }
+                                    }
+                                }
+                            }
+                        },
+                        "required": ["trafficScore", "estimatedTravelTime", "mostEfficientRouteDescription", "briefingText", "keyCongestionAreas", "dailyTrafficOutlook", "historicalTrafficTrends", "issueDistribution", "fixedRouteHourlyTravelTimes", "alternativeRoutesComparison"]
+                    }
+                }
+            };
+
+            const geminiApiKey = "AIzaSyAOew8jVpBMTP-P6vuj7CryfQjzWTPLFsI"; // The API key is automatically provided by the Canvas environment.
+
+            const apiUrl = https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey};
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const jsonString = result.candidates[0].content.parts[0].text;
+                    try {
+                        const briefingData = JSON.parse(jsonString);
+                        const {
+                            trafficScore,
+                            estimatedTravelTime,
+                            mostEfficientRouteDescription,
+                            briefingText,
+                            keyCongestionAreas,
+                            dailyTrafficOutlook,
+                            historicalTrafficTrends, // New data
+                            issueDistribution,       // New data
+                            fixedRouteHourlyTravelTimes, // New data
+                            alternativeRoutesComparison // New data
+                        } = briefingData;
+
+                        // Update route-specific traffic chart
+                        updateTrafficChart(trafficScore);
+
+                        // Update new summary details
+                        briefingSummary.innerHTML = `
+                            <p class="font-semibold text-lg mb-2">Estimated Travel Time: <span class="text-blue-900">${estimatedTravelTime}</span></p>
+                            <p class="font-semibold text-lg mb-4">Most Efficient Route: <span class="text-blue-900">${mostEfficientRouteDescription}</span></p>
+                        `;
+
+                        // Update general briefing text
+                        briefingTextContent.innerHTML = <p>${briefingText}</p>;
+
+                        // Update key congestion areas
+                        if (keyCongestionAreas && keyCongestionAreas.length > 0) {
+                            keyCongestionAreasDiv.innerHTML = <h3 class="font-semibold text-blue-800 mt-4 mb-2">Key Congestion Areas:</h3><ul class="list-disc list-inside"> +
+                                keyCongestionAreas.map(area => <li>${area}</li>).join('') + </ul>;
+                        } else {
+                            keyCongestionAreasDiv.innerHTML = <p class="text-blue-500 mt-4">No specific congestion areas highlighted.</p>;
+                        }
+
+                        // Update daily traffic outlook chart
+                        if (dailyTrafficOutlook && dailyTrafficOutlook.length === 24) {
+                            updateDailyTrafficChart(dailyTrafficOutlook);
+                        } else {
+                            console.warn("Daily traffic outlook data is missing or incomplete.", dailyTrafficOutlook);
+                            document.getElementById('dailyTrafficChart').getContext('2d').clearRect(0, 0, document.getElementById('dailyTrafficChart').width, document.getElementById('dailyTrafficChart').height);
+                        }
+
+                        // New: Update historical traffic chart
+                        if (historicalTrafficTrends && historicalTrafficTrends.length > 0) {
+                            updateHistoricalTrafficChart(historicalTrafficTrends);
+                        } else {
+                            console.warn("Historical traffic trends data is missing or incomplete.", historicalTrafficTrends);
+                            document.getElementById('historicalTrafficChart').getContext('2d').clearRect(0, 0, document.getElementById('historicalTrafficChart').width, document.getElementById('historicalTrafficChart').height);
+                        }
+
+                        // New: Update issue distribution chart
+                        if (issueDistribution && Object.keys(issueDistribution).length > 0) {
+                            updateIssueDistributionChart(issueDistribution);
+                        } else {
+                            console.warn("Issue distribution data is missing or incomplete.", issueDistribution);
+                            document.getElementById('issueDistributionChart').getContext('2d').clearRect(0, 0, document.getElementById('issueDistributionChart').width, document.getElementById('issueDistributionChart').height);
+                        }
+
+                        // New: Update fixed route hourly travel chart
+                        if (fixedRouteHourlyTravelTimes && fixedRouteHourlyTravelTimes.length === 24) {
+                            updateFixedRouteHourlyTravelChart(fixedRouteHourlyTravelTimes);
+                        } else {
+                            console.warn("Fixed route hourly travel times data is missing or incomplete.", fixedRouteHourlyTravelTimes);
+                            document.getElementById('fixedRouteTravelChart').getContext('2d').clearRect(0, 0, document.getElementById('fixedRouteTravelChart').width, document.getElementById('fixedRouteTravelChart').height);
+                        }
+
+                        // New: Update alternative routes comparison chart
+                        if (alternativeRoutesComparison && alternativeRoutesComparison.length > 0) {
+                            updateAlternativeRoutesChart(alternativeRoutesComparison);
+                        } else {
+                            console.warn("Alternative routes comparison data is missing or incomplete.", alternativeRoutesComparison);
+                            document.getElementById('alternativeRoutesChart').getContext('2d').clearRect(0, 0, document.getElementById('alternativeRoutesChart').width, document.getElementById('alternativeRoutesChart').height);
+                        }
+
+
+                    } catch (parseError) {
+                        briefingSummary.innerHTML = '';
+                        briefingTextContent.innerHTML = '<p class="text-red-500">Failed to parse briefing data. Please try again.</p>';
+                        dailyTrafficPanel.classList.add('hidden');
+                        mapPreviewPanel.classList.add('hidden');
+                        historicalTrafficPanel.classList.add('hidden'); // Hide new panels on parse error
+                        issueDistributionPanel.classList.add('hidden');
+                        fixedRouteTravelPanel.classList.add('hidden');
+                        alternativeRoutesPanel.classList.add('hidden');
+                        roadAlertsPanel.classList.add('hidden'); // Hide alerts panel on parse error
+                        console.error("Error parsing Gemini API JSON response:", parseError, jsonString);
+                    }
+                } else {
+                    briefingSummary.innerHTML = '';
+                    briefingTextContent.innerHTML = '<p class="text-red-500">Failed to generate briefing. Please try again.</p>';
+                    dailyTrafficPanel.classList.add('hidden');
+                    mapPreviewPanel.classList.add('hidden');
+                    historicalTrafficPanel.classList.add('hidden'); // Hide new panels on API response error
+                    issueDistributionPanel.classList.add('hidden');
+                    fixedRouteTravelPanel.classList.add('hidden');
+                    alternativeRoutesPanel.classList.add('hidden');
+                    roadAlertsPanel.classList.add('hidden'); // Hide alerts panel on API response error
+                    console.error("Gemini API response structure unexpected:", result);
+                }
+            } catch (error) {
+                briefingSummary.innerHTML = '';
+                briefingTextContent.innerHTML = '<p class="text-red-500">Error connecting to briefing service. Please check your network.</p>';
+                dailyTrafficPanel.classList.add('hidden');
+                mapPreviewPanel.classList.add('hidden');
+                historicalTrafficPanel.classList.add('hidden'); // Hide new panels on network error
+                issueDistributionPanel.classList.add('hidden');
+                fixedRouteTravelPanel.classList.add('hidden');
+                alternativeRoutesPanel.classList.add('hidden');
+                roadAlertsPanel.classList.add('hidden'); // Hide alerts panel on network error
+                console.error("Error fetching Gemini API:", error);
+            }
+        }
+
+        // Event listener for image file input change
+        document.addEventListener('DOMContentLoaded', () => {
+            const issueImageInput = document.getElementById('issue-image');
+            const reportImagePreview = document.getElementById('report-image-preview');
+            const submitReportButton = document.getElementById('submit-report');
+            const reportMessageDiv = document.getElementById('report-message');
+            const loginControllerButton = document.getElementById('login-controller-button'); // Get the new button
+
+            issueImageInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        reportImagePreview.src = e.target.result;
+                        reportImagePreview.style.display = 'block'; // Show the image preview
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    reportImagePreview.src = '#';
+                    reportImagePreview.style.display = 'none'; // Hide if no file selected
+                }
+            });
+
+            submitReportButton.addEventListener('click', () => {
+                const issueType = document.getElementById('issue-type').value;
+                const issueDescription = document.getElementById('issue-description').value;
+                const issueLocation = document.getElementById('issue-location').value; // Get the new location field
+                const issueImage = document.getElementById('issue-image').files[0];
+
+                if (!issueType) {
+                    reportMessageDiv.className = 'mt-4 text-center text-red-700';
+                    reportMessageDiv.textContent = 'Please select an issue type.';
+                    reportMessageDiv.classList.remove('hidden');
+                    return;
+                }
+
+                // Construct report details for display
+                let reportDetails = Report submitted successfully! Thank you for your contribution.<br>;
+                reportDetails += Issue Type: ${issueType}<br>;
+                if (issueDescription) reportDetails += Description: ${issueDescription}<br>;
+                if (issueLocation) reportDetails += Location: ${issueLocation}<br>;
+                if (issueImage) reportDetails += Image: ${issueImage.name}<br>;
+
+
+                // Simulate report submission for hackathon demo
+                reportMessageDiv.className = 'mt-4 text-center text-green-700';
+                reportMessageDiv.innerHTML = reportDetails; // Use innerHTML for line breaks
+                reportMessageDiv.classList.remove('hidden');
+
+                // Clear the form after submission
+                document.getElementById('issue-type').value = '';
+                document.getElementById('issue-description').value = '';
+                document.getElementById('issue-location').value = ''; // Clear the new location field
+                document.getElementById('issue-image').value = ''; // Clear file input
+                reportImagePreview.src = '#';
+                reportImagePreview.style.display = 'none'; // Hide image preview
+
+                // Hide message after a few seconds
+                setTimeout(() => {
+                    reportMessageDiv.classList.add('hidden');
+                }, 5000);
+            });
+
+            // Attach event listener for the briefing button
+            document.getElementById("get-briefing").addEventListener("click", getTrafficBriefing);
+
+            // New: Event listener for the "Login as Traffic Controller" button
+            loginControllerButton.addEventListener('click', () => {
+                // Get the base URL of the current page
+                const currentPath = window.location.pathname;
+                const currentDirectory = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                window.location.href = currentDirectory + '/traffic-controller-login.html';
+            });
+        });
+    </script>
+</body>
+</html>
